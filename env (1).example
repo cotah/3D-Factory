@@ -1,0 +1,127 @@
+# =============================================================
+# Print3D Platform — Environment Variables
+# Copie este arquivo para .env e preencha com seus valores reais
+# NUNCA faça commit do .env com valores reais
+# =============================================================
+
+# -------------------------------------------------------------
+# APLICAÇÃO
+# -------------------------------------------------------------
+APP_NAME=Print3D Platform
+APP_ENV=development          # development | staging | production
+APP_DEBUG=true
+APP_SECRET_KEY=change-me-to-a-random-64-char-string
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+
+# -------------------------------------------------------------
+# BANCO DE DADOS
+# URL completa do PostgreSQL
+# Formato: postgresql+asyncpg://user:password@host:port/dbname
+# -------------------------------------------------------------
+DATABASE_URL=postgresql+asyncpg://print3d:print3d@localhost:5432/print3d
+DATABASE_POOL_SIZE=10
+DATABASE_MAX_OVERFLOW=20
+
+# -------------------------------------------------------------
+# REDIS
+# Usado pelo Celery para filas de jobs assíncronos
+# -------------------------------------------------------------
+REDIS_URL=redis://localhost:6379/0
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/1
+
+# -------------------------------------------------------------
+# AUTH / JWT
+# -------------------------------------------------------------
+JWT_SECRET_KEY=change-me-to-another-random-64-char-string
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
+JWT_REFRESH_TOKEN_EXPIRE_DAYS=30
+
+# -------------------------------------------------------------
+# ANTHROPIC — Claude API
+# Orquestrador de IA: gera briefings, analisa pedidos
+# -------------------------------------------------------------
+ANTHROPIC_API_KEY=sk-ant-...
+CLAUDE_MODEL=claude-opus-4-20250514
+CLAUDE_MAX_TOKENS=4096
+
+# -------------------------------------------------------------
+# OPENAI — GPT Image 2
+# Geração de imagens conceituais (6 ângulos)
+# -------------------------------------------------------------
+OPENAI_API_KEY=sk-...
+OPENAI_IMAGE_MODEL=gpt-image-2
+OPENAI_IMAGE_SIZE=1024x1024
+OPENAI_IMAGE_QUALITY=high
+
+# -------------------------------------------------------------
+# RUNPOD — TRELLIS.2
+# Geração do modelo 3D serverless
+# -------------------------------------------------------------
+RUNPOD_API_KEY=...
+RUNPOD_TRELLIS_ENDPOINT_ID=...
+RUNPOD_TIMEOUT_SECONDS=300
+RUNPOD_WEBHOOK_SECRET=change-me-runpod-webhook-secret
+
+# -------------------------------------------------------------
+# STORAGE — S3 Compatible (AWS S3 ou Cloudflare R2)
+# -------------------------------------------------------------
+STORAGE_PROVIDER=r2                  # s3 | r2
+STORAGE_ACCESS_KEY=...
+STORAGE_SECRET_KEY=...
+STORAGE_BUCKET=print3d-assets
+STORAGE_REGION=auto                  # auto para R2, região para S3
+STORAGE_ENDPOINT_URL=https://account-id.r2.cloudflarestorage.com
+STORAGE_PUBLIC_URL=https://assets.seudominio.com
+
+# Limites de upload
+UPLOAD_MAX_FILE_SIZE_MB=50
+UPLOAD_ALLOWED_EXTENSIONS=png,jpg,jpeg,webp,glb,obj,stl,zip
+
+# -------------------------------------------------------------
+# EMAIL — Notificações
+# -------------------------------------------------------------
+SMTP_HOST=smtp.resend.com
+SMTP_PORT=587
+SMTP_USER=resend
+SMTP_PASSWORD=re_...
+SMTP_FROM_EMAIL=noreply@seudominio.com
+SMTP_FROM_NAME=Print3D Platform
+
+# -------------------------------------------------------------
+# STRIPE — Pagamentos (Fase futura)
+# -------------------------------------------------------------
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_PUBLISHABLE_KEY=pk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+# -------------------------------------------------------------
+# MODO MOCK — Desenvolvimento sem gastar créditos de API
+# Quando true, usa providers simulados que retornam dados fake
+# -------------------------------------------------------------
+AI_MOCK_MODE=true
+RUNPOD_MOCK_MODE=true
+STORAGE_MOCK_MODE=false
+
+# -------------------------------------------------------------
+# SENTRY — Observabilidade (produção)
+# -------------------------------------------------------------
+SENTRY_DSN=https://...@sentry.io/...
+SENTRY_ENVIRONMENT=development
+SENTRY_TRACES_SAMPLE_RATE=0.1
+
+# -------------------------------------------------------------
+# ADMIN — Conta criada automaticamente no seed
+# -------------------------------------------------------------
+ADMIN_EMAIL=admin@print3d.com
+ADMIN_PASSWORD=change-me-admin-password
+ADMIN_NAME=Admin
+
+# -------------------------------------------------------------
+# FRONTEND (Next.js)
+# Variáveis públicas — prefixo NEXT_PUBLIC_
+# -------------------------------------------------------------
+NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...

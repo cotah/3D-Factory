@@ -1,0 +1,46 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+*.sqlite3
+*.db
+
+# ---- uv ----
+# keep uv.lock committed; ignore caches only
+
+# ---- Environment ----
+.env
+.env.local
+.env.production
+*.local
+
+# ---- Local tool / editor config ----
+.mcp.json
+.claude/settings.local.json
+.uv/
+
+# ---- Node / Next.js ----
+node_modules/
+.next/
+out/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ---- Editors / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- Uploads (local dev storage) ----
+uploads/
+tmp_uploads/
+local_storage/
+backend/local_storage/
