@@ -1,3 +1,8 @@
+# Nixpacks build for Railway. The base image has neither uv nor pip on PATH,
+# so we provide Python 3.11 + uv (+ gcc for any C extensions) via nix.
+[phases.setup]
+nixPkgs = ["python311", "uv", "gcc"]
+
 [phases.install]
 cmds = ["uv sync --frozen"]
 
