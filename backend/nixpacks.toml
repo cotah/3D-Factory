@@ -1,10 +1,5 @@
-# Nixpacks build config for Railway — pins Python 3.11 and installs with uv.
-[phases.setup]
-nixPkgs = ["python311", "gcc"]
-
 [phases.install]
-cmds = ["pip install uv", "uv sync --frozen"]
+cmds = ["uv sync --frozen"]
 
-# `uv run` ensures alembic/uvicorn resolve from the project venv on Railway.
 [start]
-cmd = "sh -c \"uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT\""
+cmd = "uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT"
