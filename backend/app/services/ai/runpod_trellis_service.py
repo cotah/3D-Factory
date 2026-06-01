@@ -118,12 +118,53 @@ class RunpodTrellisProvider(ThreeDGenerationProvider):
             )
 
         output = body.get("output") or {}
+        job_id = body.get("id")
+
+        # The worker reports per-job errors inside the output payload.
+        if output.get("error"):
+            return GenerateModelOutput(
+                success=False,
+                job_id=job_id,
+                error_message=str(output["error"]),
+            )
+
+        fmt = output.get("format", "glb")
+
+        # Preferred: the worker returns the GLB as base64. Decode, store it and
+        # return the stored URL so the rest of the pipeline is provider-agnostic.
+        model_b64 = output.get("model_base64")
+        if model_b64:
+            import base64
+
+            from app.services.storage.storage_service import get_storage_service
+
+            model_bytes = base64.b64decode(model_b64)
+            storage = get_storage_service()
+            key = f"models/{data.order_id}/generated_v{data.attempt_number}.{fmt}"
+            file_url = await storage.save_file(model_bytes, key, "model/gltf-binary")
+            return GenerateModelOutput(
+                success=True,
+                file_url=file_url,
+                file_format=fmt,
+                job_id=job_id,
+                metadata={"size_bytes": output.get("size_bytes")},
+            )
+
+        # Fallback: the worker returned a direct URL.
+        file_url = output.get("model_url") or output.get("url")
+        if file_url:
+            return GenerateModelOutput(
+                success=True,
+                file_url=file_url,
+                file_format=fmt,
+                job_id=job_id,
+                metadata=output,
+            )
+
         return GenerateModelOutput(
-            success=True,
-            file_url=output.get("model_url") or output.get("url"),
-            file_format=output.get("format", "glb"),
-            job_id=body.get("id"),
-            metadata=output,
+            success=False,
+            job_id=job_id,
+            error_message="RunPod output had no model_base64 or model_url.",
         )
 
 

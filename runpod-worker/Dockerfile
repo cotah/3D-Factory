@@ -1,0 +1,79 @@
+# Base image with CUDA 12.4 + cuDNN (devel, so nvcc is available for builds).
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV OPENCV_IO_ENABLE_OPENEXR=1
+ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+# Build CUDA extensions for common datacenter + Ada GPUs.
+ENV TORCH_CUDA_ARCH_LIST="8.6;8.9;9.0"
+
+RUN apt-get update && apt-get install -y \
+    python3.11 \
+    python3.11-dev \
+    python3-pip \
+    git \
+    wget \
+    curl \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    ninja-build \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 \
+    && ln -sf /usr/bin/python3 /usr/bin/python
+
+RUN pip3 install --upgrade pip
+
+WORKDIR /app
+
+# PyTorch with CUDA 12.4.
+RUN pip3 install torch==2.4.0 torchvision==0.19.0 --index-url https://download.pytorch.org/whl/cu124
+
+# Flash Attention (needs torch already installed; --no-build-isolation).
+RUN pip3 install flash-attn --no-build-isolation
+
+# RunPod SDK.
+RUN pip3 install runpod==1.7.0
+
+# TRELLIS Python dependencies.
+RUN pip3 install \
+    pillow \
+    numpy \
+    scipy \
+    trimesh \
+    open3d \
+    huggingface_hub \
+    transformers \
+    diffusers \
+    accelerate \
+    einops \
+    imageio \
+    imageio-ffmpeg \
+    requests \
+    opencv-python-headless \
+    easydict \
+    omegaconf \
+    plyfile \
+    pygltflib
+
+# nvdiffrast (rendering).
+RUN pip3 install git+https://github.com/NVlabs/nvdiffrast.git
+
+# Clone and install TRELLIS.
+RUN git clone https://github.com/microsoft/TRELLIS.git /app/TRELLIS
+WORKDIR /app/TRELLIS
+RUN pip3 install -e .
+
+WORKDIR /app
+COPY handler.py .
+
+# Optional: pre-download the model weights to speed up cold start (bigger image).
+# RUN python3 -c "from trellis.pipelines import TrellisImageTo3DPipeline; TrellisImageTo3DPipeline.from_pretrained('microsoft/TRELLIS-image-large')"
+
+CMD ["python3", "-u", "handler.py"]
