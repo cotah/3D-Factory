@@ -34,16 +34,13 @@ RUN pip3 install --upgrade pip
 
 WORKDIR /app
 
-# PyTorch with CUDA 12.4.
-RUN pip3 install torch==2.4.0 torchvision==0.19.0 --index-url https://download.pytorch.org/whl/cu124
-
-# xformers attention (flash-attn fails to compile in this image; xformers ships
-# prebuilt CUDA wheels and TRELLIS supports it via ATTN_BACKEND=xformers).
-# Unpinned xformers, but constrain torch/torchvision in the SAME command so pip
-# cannot upgrade torch to satisfy a newer xformers — an upgrade would break
-# torchvision's compiled ops ("operator torchvision::nms does not exist"). pip
-# resolves to the xformers build that matches torch 2.4.0.
-RUN pip3 install xformers torch==2.4.0 torchvision==0.19.0 --index-url https://download.pytorch.org/whl/cu124
+# PyTorch + xformers with CUDA 12.4, installed in ONE command so pip resolves a
+# mutually-compatible set. There is no standalone xformers wheel for torch 2.4.0
+# + cu124, so pinning torch/torchvision here lets pip pick the matching xformers
+# build and never upgrade torch (an upgrade breaks torchvision's compiled ops:
+# "operator torchvision::nms does not exist"). flash-attn fails to compile in
+# this image; TRELLIS uses xformers via ATTN_BACKEND=xformers.
+RUN pip3 install torch==2.4.0 torchvision==0.19.0 xformers --index-url https://download.pytorch.org/whl/cu124
 
 # RunPod SDK.
 RUN pip3 install runpod==1.7.0
