@@ -48,6 +48,10 @@ RUN pip3 install \
 # spconv (sparse convolution — obrigatório para TRELLIS)
 RUN pip3 install spconv-cu124
 
+# kaolin (usado pelo flexicubes na extração de malha). Wheel pré-compilado do
+# índice NVIDIA para torch 2.4.0 (cu121 — compatível com o runtime cu124).
+RUN pip3 install kaolin==0.18.0 -f https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.4.0_cu121.html
+
 # Clona TRELLIS e adiciona ao PYTHONPATH. --recurse-submodules é essencial: o
 # flexicubes (trellis/representations/mesh/flexicubes) é um submódulo git; sem
 # isso o diretório vem vazio e o import de FlexiCubes falha.
