@@ -93,22 +93,31 @@ def handler(job):
             image = _base64_to_image(first_image)
         print(f"Image loaded: {image.size}")
 
-        print("Running 3D generation...")
-        outputs = pipeline.run(image, seed=42, formats=[output_format])
+        print("Running 3D generation (mesh only)...")
+        outputs = pipeline.run(image, seed=42, formats=["mesh"])
+        mesh = outputs["mesh"][0]
+
+        # Geometry-only export via trimesh. Avoids the textured to_glb() path,
+        # which needs the nvdiffrast + diff_gaussian_rasterization CUDA
+        # extensions (deferred to a later phase). For 3D printing the geometry
+        # is what matters; vertex colors are included when available for a
+        # nicer preview.
+        import trimesh as _trimesh
+
+        vertices = mesh.vertices.detach().cpu().numpy()
+        faces = mesh.faces.detach().cpu().numpy()
+        tm = _trimesh.Trimesh(vertices=vertices, faces=faces)
+        try:
+            attrs = mesh.vertex_attrs.detach().cpu().numpy()
+            if attrs.ndim == 2 and attrs.shape[1] >= 3:
+                colors = (attrs[:, :3].clip(0, 1) * 255).astype("uint8")
+                tm.visual.vertex_colors = colors
+        except Exception:  # noqa: BLE001
+            pass
 
         with tempfile.NamedTemporaryFile(suffix=f".{output_format}", delete=False) as tmp:
             tmp_path = tmp.name
-
-        if output_format == "glb":
-            from trellis.utils import postprocessing_utils
-
-            glb = postprocessing_utils.to_glb(
-                outputs["gaussian"][0],
-                outputs["mesh"][0],
-                simplify=0.95,
-                texture_size=1024,
-            )
-            glb.export(tmp_path)
+        tm.export(tmp_path)
 
         with open(tmp_path, "rb") as f:
             model_bytes = f.read()
