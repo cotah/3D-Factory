@@ -61,6 +61,12 @@ ENV PYTHONPATH=/app/TRELLIS
 
 WORKDIR /app
 
+# Pré-baixa os pesos do TRELLIS-image-large para o cache HF DENTRO da imagem, para
+# o worker não baixar vários GB a cada cold start (causava "job timed out"). O
+# snapshot_download só baixa arquivos (não importa trellis nem usa GPU), então
+# roda no builder sem GPU. Antes do COPY para não rebaixar quando o handler muda.
+RUN python3 -c "from huggingface_hub import snapshot_download; snapshot_download('microsoft/TRELLIS-image-large')"
+
 COPY handler.py .
 
 CMD ["python3", "-u", "handler.py"]
