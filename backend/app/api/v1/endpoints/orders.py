@@ -10,14 +10,16 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.core.config import settings
 from app.core.database import get_session
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_roles
 from app.models.models import (
     AIGenerationJob,
     ApprovalStage,
@@ -38,14 +40,17 @@ from app.schemas.order import (
     ApproveConceptRequest,
     ApproveFinalRequest,
     AssetResponse,
+    DesignerAssignRequest,
+    DesignerTaskResponse,
     MessageResponse,
     OrderCreate,
     OrderDetailResponse,
     OrderResponse,
     OrderUpdate,
 )
-from app.services.ai.claude_service import ClaudeService
+from app.services.ai.claude_service import ClaudeService, generate_designer_brief
 from app.services.ai.openai_image_service import OpenAIImageService
+from app.services.email_service import send_designer_notification
 from app.services.ai.runpod_trellis_service import (
     GenerateModelInput,
     get_3d_provider,
@@ -481,13 +486,154 @@ async def validate_mesh(
     return order
 
 
-@router.post("/{order_id}/upload-final-model", response_model=OrderResponse)
+_MODEL_EXTENSIONS = {"glb", "obj", "stl"}
+
+
+async def _open_designer_task(order_id: int, session: AsyncSession) -> DesignerTask | None:
+    result = await session.execute(
+        select(DesignerTask)
+        .where(DesignerTask.order_id == order_id)
+        .where(DesignerTask.status != "closed")
+        .order_by(DesignerTask.created_at.desc())
+    )
+    return result.scalars().first()
+
+
+def _task_notes(task: DesignerTask) -> dict:
+    if task.notes:
+        try:
+            return json.loads(task.notes)
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+async def _designer_task_detail(
+    task: DesignerTask, order: Order, session: AsyncSession
+) -> DesignerTaskResponse:
+    notes = _task_notes(task)
+    brief = notes.get("brief") or generate_designer_brief(order)
+
+    img_rows = await session.execute(
+        select(ProjectAsset)
+        .where(ProjectAsset.order_id == order.id)
+        .where(ProjectAsset.type == AssetType.concept_image)
+        .order_by(ProjectAsset.created_at.asc())
+    )
+    concept_images = [
+        AssetResponse.model_validate(a, from_attributes=True)
+        for a in img_rows.scalars().all()
+    ]
+
+    final_rows = await session.execute(
+        select(ProjectAsset)
+        .where(ProjectAsset.order_id == order.id)
+        .where(ProjectAsset.type == AssetType.final_model)
+        .order_by(ProjectAsset.created_at.desc())
+    )
+    final = final_rows.scalars().first()
+
+    return DesignerTaskResponse(
+        id=task.id,
+        order_id=task.order_id,
+        status=task.status,
+        assigned_to=task.assigned_to,
+        deadline=notes.get("deadline"),
+        instructions=notes.get("instructions"),
+        brief=brief,
+        concept_images=concept_images,
+        final_model_url=final.storage_url if final else None,
+        created_at=task.created_at,
+    )
+
+
+@router.post("/{order_id}/request-designer", response_model=DesignerTaskResponse)
+async def request_designer(
+    order_id: int,
+    current_user: User = Depends(require_roles(UserRole.admin)),
+    session: AsyncSession = Depends(get_session),
+) -> DesignerTaskResponse:
+    """Admin escalates a stuck order to a human designer (idempotent)."""
+    order = await session.get(Order, order_id)
+    if order is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    if order.status != OrderStatus.designer_required:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Order is not awaiting a designer.",
+        )
+
+    existing = await _open_designer_task(order_id, session)
+    if existing is not None:
+        return await _designer_task_detail(existing, order, session)
+
+    brief = generate_designer_brief(order)
+    deadline = utcnow() + timedelta(days=7)  # ~5 business days
+    task = DesignerTask(
+        order_id=order.id,
+        status="open",
+        notes=json.dumps(
+            {
+                "brief": brief,
+                "instructions": brief["instructions"],
+                "deadline": deadline.isoformat(),
+            }
+        ),
+    )
+    session.add(task)
+    await session.commit()
+    await session.refresh(task)
+    logger.info("Designer task created for order id={}", order.id)
+    return await _designer_task_detail(task, order, session)
+
+
+@router.patch("/{order_id}/designer-task", response_model=DesignerTaskResponse)
+async def assign_designer_task(
+    order_id: int,
+    payload: DesignerAssignRequest,
+    current_user: User = Depends(require_roles(UserRole.admin)),
+    session: AsyncSession = Depends(get_session),
+) -> DesignerTaskResponse:
+    """Admin assigns a designer to the task and notifies them."""
+    order = await session.get(Order, order_id)
+    if order is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+
+    task = await _open_designer_task(order_id, session)
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="No open designer task"
+        )
+
+    designer = await session.get(User, payload.designer_id)
+    if designer is None or designer.role != UserRole.designer:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="designer_id must reference a user with the designer role",
+        )
+
+    notes = _task_notes(task)
+    if payload.instructions:
+        notes["instructions"] = payload.instructions
+    task.notes = json.dumps(notes)
+    task.assigned_to = designer.id
+    task.status = "in_progress"
+    session.add(task)
+    await session.commit()
+    await session.refresh(task)
+
+    await send_designer_notification(designer, order, task)
+    return await _designer_task_detail(task, order, session)
+
+
+@router.post("/{order_id}/upload-final-model", response_model=OrderDetailResponse)
 async def upload_final_model(
     order_id: int,
+    file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> Order:
-    """Admin/designer marks the final model as uploaded (real upload in Phase 2)."""
+) -> OrderDetailResponse:
+    """Admin/designer uploads the final 3D model; order awaits final approval."""
     if not _is_staff(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -496,12 +642,71 @@ async def upload_final_model(
     order = await session.get(Order, order_id)
     if order is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+
+    filename = file.filename or "model.glb"
+    ext = os.path.splitext(filename)[1].lower().lstrip(".")
+    if ext not in _MODEL_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Model must be one of: {', '.join(sorted(_MODEL_EXTENSIONS))}",
+        )
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
+    if len(data) > settings.upload_max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File exceeds the {settings.upload_max_file_size_mb}MB limit",
+        )
+
+    # Version by counting existing final models (files are never deleted).
+    existing = await session.execute(
+        select(ProjectAsset)
+        .where(ProjectAsset.order_id == order.id)
+        .where(ProjectAsset.type == AssetType.final_model)
+    )
+    version = len(list(existing.scalars().all())) + 1
+
+    storage = get_storage_service()
+    key = f"models/{order.id}/final_v{version}.{ext}"
+    storage_url = await storage.save_file(data, key, "model/gltf-binary")
+
+    session.add(
+        ProjectAsset(
+            order_id=order.id,
+            type=AssetType.final_model,
+            filename=f"final_v{version}.{ext}",
+            storage_url=storage_url,
+            content_type=file.content_type,
+            size_bytes=len(data),
+        )
+    )
+
+    # Mark the designer task as submitted, if any.
+    task = await _open_designer_task(order.id, session)
+    if task is not None:
+        notes = _task_notes(task)
+        notes["uploaded_file_url"] = storage_url
+        task.notes = json.dumps(notes)
+        task.status = "submitted"
+        session.add(task)
+
     order.status = OrderStatus.waiting_final_approval
     order.updated_at = utcnow()
     session.add(order)
+
+    session.add(
+        CustomerApproval(
+            order_id=order.id,
+            stage=ApprovalStage.final,
+            status=ApprovalStatus.pending,
+        )
+    )
     await session.commit()
     await session.refresh(order)
-    return order
+    logger.info("Final model uploaded for order id={} (v{})", order.id, version)
+    return await _build_order_detail(order, session)
 
 
 @router.post("/{order_id}/approve-final", response_model=OrderDetailResponse)

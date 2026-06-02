@@ -19,6 +19,7 @@ import {
   setTokens,
 } from "@/lib/auth";
 import type {
+  DesignerTask,
   Order,
   OrderDetail,
   ProjectAsset,
@@ -200,6 +201,31 @@ export const assetsApi = {
     form.append("file", file);
     const { data } = await api.post<ProjectAsset>(
       `/orders/${orderId}/assets`,
+      form,
+      { headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return data;
+  },
+};
+
+// ----------------------------- Designer ------------------------------
+export const designerApi = {
+  async listTasks(): Promise<DesignerTask[]> {
+    const { data } = await api.get<DesignerTask[]>("/designer/tasks");
+    return data;
+  },
+
+  async getTask(id: number): Promise<DesignerTask> {
+    const { data } = await api.get<DesignerTask>(`/designer/tasks/${id}`);
+    return data;
+  },
+
+  // Designer/admin uploads the final 3D model for an order.
+  async uploadFinalModel(orderId: number, file: File): Promise<OrderDetail> {
+    const form = new FormData();
+    form.append("file", file);
+    const { data } = await api.post<OrderDetail>(
+      `/orders/${orderId}/upload-final-model`,
       form,
       { headers: { "Content-Type": "multipart/form-data" } },
     );

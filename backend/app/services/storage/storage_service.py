@@ -84,34 +84,64 @@ class LocalStorageService(StorageService):
     async def get_public_url(self, key: str) -> str:
         return f"{settings.static_base_url.rstrip('/')}/{key}"
 
+    async def delete_file(self, key: str) -> bool:
+        path = self._abs_path(key)
+        try:
+            os.remove(path)
+            return True
+        except OSError:
+            return False
+
 
 class S3StorageService(StorageService):
-    """Upload files to an S3-compatible bucket (AWS S3 or Cloudflare R2)."""
+    """Upload files to an S3-compatible bucket (AWS S3 or Cloudflare R2).
+
+    Cloudflare R2 requires SigV4 and ``region_name='auto'``; both are set here.
+    """
 
     def __init__(self) -> None:
         import boto3  # lazy: only needed in production
+        from botocore.config import Config
 
         self._client = boto3.client(
             "s3",
             aws_access_key_id=settings.storage_access_key,
             aws_secret_access_key=settings.storage_secret_key,
             endpoint_url=settings.storage_endpoint_url or None,
-            region_name=settings.storage_region,
+            region_name=settings.storage_region or "auto",
+            config=Config(signature_version="s3v4"),
         )
         self._bucket = settings.storage_bucket
 
     async def save_file(self, file_content: bytes, key: str, content_type: str) -> str:
-        # boto3 is synchronous; acceptable for the prod upload path.
-        self._client.put_object(
-            Bucket=self._bucket,
-            Key=key,
-            Body=file_content,
-            ContentType=content_type,
-        )
+        from botocore.exceptions import BotoCoreError, ClientError
+
+        try:
+            # boto3 is synchronous; acceptable for the prod upload path.
+            self._client.put_object(
+                Bucket=self._bucket,
+                Key=key,
+                Body=file_content,
+                ContentType=content_type,
+            )
+        except (BotoCoreError, ClientError) as exc:
+            # Never log credentials; just the operation and error type.
+            logger.error("R2 upload failed for key={}: {}", key, type(exc).__name__)
+            raise RuntimeError("Storage upload failed") from exc
         return await self.get_public_url(key)
 
     async def get_public_url(self, key: str) -> str:
         return f"{settings.storage_public_url.rstrip('/')}/{key}"
+
+    async def delete_file(self, key: str) -> bool:
+        from botocore.exceptions import BotoCoreError, ClientError
+
+        try:
+            self._client.delete_object(Bucket=self._bucket, Key=key)
+            return True
+        except (BotoCoreError, ClientError) as exc:
+            logger.error("R2 delete failed for key={}: {}", key, type(exc).__name__)
+            return False
 
 
 def get_storage_service() -> StorageService:

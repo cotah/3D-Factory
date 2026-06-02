@@ -7,7 +7,13 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 
-export function ProtectedRoute({ children }: { children: React.ReactNode }) {
+export function ProtectedRoute({
+  children,
+  roles,
+}: {
+  children: React.ReactNode;
+  roles?: string[];
+}) {
   const { user, loading } = useAuth();
   const router = useRouter();
 
@@ -21,6 +27,14 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return (
       <div className="flex min-h-screen items-center justify-center text-muted-foreground">
         Carregando...
+      </div>
+    );
+  }
+
+  if (roles && !roles.includes(user.role)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-muted-foreground">
+        Você não tem acesso a esta área.
       </div>
     );
   }

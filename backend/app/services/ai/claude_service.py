@@ -205,3 +205,39 @@ class ClaudeService:
         )
         brief.raw_json = json.dumps(brief.to_public_dict(), ensure_ascii=False)
         return brief
+
+
+def generate_designer_brief(order: Order) -> dict:
+    """Build a technical brief for a human designer.
+
+    Intentionally contains NO customer personal data (no name, email, address
+    or payment info) — only the order's technical attributes. The reference is
+    an opaque order code, never the customer identity.
+    """
+    brief_data: dict = {}
+    if order.ai_brief_json:
+        try:
+            brief_data = json.loads(order.ai_brief_json)
+        except json.JSONDecodeError:
+            brief_data = {}
+
+    return {
+        "order_reference": f"ORD-{order.id:06d}",
+        "title": order.title,
+        "category": order.category,
+        "size": order.size,
+        "colors": order.colors,
+        "material": order.material,
+        "deadline": order.deadline,
+        "technical_summary": brief_data.get("technical_summary", ""),
+        "complexity": order.complexity,
+        "model_3d_prompt": brief_data.get("model_3d_prompt", ""),
+        "risks": brief_data.get("risks", []),
+        "print_alerts": brief_data.get("print_alerts", []),
+        "ai_attempts": order.ai_attempts,
+        "instructions": (
+            "Crie um modelo 3D em GLB ou STL seguindo as especificações acima. "
+            "O modelo deve ser manifold (sem faces abertas), ter espessura mínima "
+            "de 1.5mm e base plana para impressão FDM."
+        ),
+    }

@@ -98,6 +98,18 @@ async def seed() -> None:
             f"{customer.email} (customer)"
         )
 
+        designer, designer_created = await _get_or_create_user(
+            session,
+            "designer@test.com",
+            "designer123",
+            "Designer Demo",
+            UserRole.designer,
+        )
+        print(
+            f"{'✅ Usuário criado' if designer_created else 'ℹ️  Já existe'}: "
+            f"{designer.email} (designer)"
+        )
+
         # Sample orders only if the demo customer has none yet.
         existing_orders = await session.execute(
             select(Order).where(Order.user_id == customer.id)

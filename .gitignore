@@ -44,3 +44,4 @@ uploads/
 tmp_uploads/
 local_storage/
 backend/local_storage/
+.gstack/

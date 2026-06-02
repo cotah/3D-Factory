@@ -111,6 +111,36 @@ export interface OrderDetail extends Order {
 }
 
 // Friendly Portuguese labels for the 6 concept angles (derived from filename).
+export interface DesignerBrief {
+  order_reference: string;
+  title: string;
+  category: string | null;
+  size: string | null;
+  colors: string | null;
+  material: string | null;
+  deadline: string | null;
+  technical_summary: string;
+  complexity: string | null;
+  model_3d_prompt: string;
+  risks: string[];
+  print_alerts: string[];
+  ai_attempts: number;
+  instructions: string;
+}
+
+export interface DesignerTask {
+  id: number;
+  order_id: number;
+  status: string;
+  assigned_to: number | null;
+  deadline: string | null;
+  instructions: string | null;
+  brief: DesignerBrief | null;
+  concept_images: ProjectAsset[];
+  final_model_url: string | null;
+  created_at: string;
+}
+
 export const CONCEPT_ANGLE_LABELS: Record<string, string> = {
   front: "Frontal",
   back: "Traseira",

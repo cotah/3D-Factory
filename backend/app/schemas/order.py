@@ -105,3 +105,23 @@ class ApproveConceptRequest(BaseModel):
 class ApproveFinalRequest(BaseModel):
     approved: bool
     comment: Optional[str] = None
+
+
+class DesignerTaskResponse(BaseModel):
+    """A designer task with its (personal-data-free) technical brief."""
+
+    id: int
+    order_id: int
+    status: str
+    assigned_to: Optional[int]
+    deadline: Optional[str] = None
+    instructions: Optional[str] = None
+    brief: Optional[dict] = None
+    concept_images: list[AssetResponse] = []
+    final_model_url: Optional[str] = None
+    created_at: datetime
+
+
+class DesignerAssignRequest(BaseModel):
+    designer_id: int
+    instructions: Optional[str] = None

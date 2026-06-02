@@ -195,8 +195,12 @@ async def test_upload_final_model_requires_staff(
         "/api/v1/orders", headers=auth_headers, json={"title": "Gear"}
     )
     order_id = create.json()["id"]
+    # A customer uploading a model is rejected (staff only).
+    files = {"file": ("model.glb", io.BytesIO(b"glb bytes"), "model/gltf-binary")}
     resp = await client.post(
-        f"/api/v1/orders/{order_id}/upload-final-model", headers=auth_headers
+        f"/api/v1/orders/{order_id}/upload-final-model",
+        headers=auth_headers,
+        files=files,
     )
     assert resp.status_code == 403
 
