@@ -39,7 +39,7 @@ payload = {
 }
 
 response = requests.post(
-    f"https://api.runpod.io/v2/{ENDPOINT_ID}/runsync",
+    f"https://api.runpod.ai/v2/{ENDPOINT_ID}/runsync",
     headers=headers,
     json=payload,
     timeout=300,

@@ -83,7 +83,7 @@ class RunpodTrellisProvider(ThreeDGenerationProvider):
     async def generate_model(self, data: GenerateModelInput) -> GenerateModelOutput:
         import httpx
 
-        url = f"https://api.runpod.io/v2/{settings.runpod_trellis_endpoint_id}/runsync"
+        url = f"https://api.runpod.ai/v2/{settings.runpod_trellis_endpoint_id}/runsync"
         headers = {"Authorization": f"Bearer {settings.runpod_api_key}"}
         payload = {
             "input": {
