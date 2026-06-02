@@ -33,12 +33,15 @@ RUN pip3 install xformers==0.0.27.post2
 # RunPod SDK
 RUN pip3 install runpod==1.7.0
 
-# Dependências básicas do TRELLIS (do setup.sh --basic)
+# Dependências básicas do TRELLIS (do setup.sh --basic). transformers/diffusers
+# PINADOS: as versões atuais assumem torch 2.5+ (transformers importa
+# torch.distributed.tensor.device_mesh, que não existe no torch 2.4). Estas são
+# da era do TRELLIS e compatíveis com torch 2.4.0 (diffusers 0.31 declara torch<2.5).
 RUN pip3 install \
     pillow imageio imageio-ffmpeg tqdm easydict \
     opencv-python-headless scipy ninja rembg onnxruntime \
     trimesh xatlas pyvista pymeshfix igraph \
-    transformers diffusers accelerate \
+    transformers==4.46.3 diffusers==0.31.0 accelerate \
     einops plyfile pygltflib omegaconf \
     git+https://github.com/EasternJournalist/utils3d.git@9a4eb15e4021b67b12c460c7057d642626897ec8
 
