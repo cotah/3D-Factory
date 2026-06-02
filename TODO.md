@@ -1,7 +1,8 @@
 # Print3D Platform — TODO & Roadmap
 
-> Status: 🟢 Fases 1, 2 e 3 concluídas — próxima: Fase 4 (Validação avançada + Designer)
-> Última atualização: Sprint 3 (Geração 3D + Preview React Three Fiber)
+> Status: 🟢 Fases 1, 2, 3 e 4 concluídas (53 testes passando) — próxima: Fase 5 (Print Workflow)
+> Em produção: backend (Railway) + frontend (Vercel) + storage R2. RunPod TRELLIS.2 em validação.
+> Última atualização: Fase 4 (Validação de mesh + reparo + fallback designer + R2)
 
 ---
 
@@ -14,7 +15,7 @@
 
 ---
 
-## 🚀 FASE 1 — Fundação e CRUD
+## 🚀 FASE 1 — Fundação e CRUD ✅
 
 **Objetivo:** Projeto rodando com auth, banco, criação de pedidos e upload.
 
@@ -97,7 +98,7 @@
 
 ---
 
-## 🧠 FASE 2 — IA: Briefing + Imagens Conceituais
+## 🧠 FASE 2 — IA: Briefing + Imagens Conceituais ✅
 
 **Objetivo:** Claude gera briefing, GPT Image 2 gera imagens, cliente aprova.
 
@@ -144,7 +145,7 @@
 
 ---
 
-## 🎨 FASE 3 — Geração 3D + Preview
+## 🎨 FASE 3 — Geração 3D + Preview ✅
 
 **Objetivo:** TRELLIS.2 gera o modelo, cliente vê preview 3D.
 
@@ -182,48 +183,47 @@
 
 ---
 
-## 🔧 FASE 4 — Validação de Mesh + Fallback Designer
+## 🔧 FASE 4 — Validação de Mesh + Fallback Designer ✅
 
 **Objetivo:** Validar modelo automaticamente, fallback humano após 3 falhas.
 
 ### Backend — Validação de Mesh
-- [ ] `services/mesh/mesh_validator.py`
-- [ ] Verificar se é manifold (Trimesh)
-- [ ] Verificar faces abertas
-- [ ] Verificar escala e unidades
-- [ ] Verificar espessura mínima
-- [ ] Verificar presença de base plana
-- [ ] Estimar necessidade de suportes
-- [ ] Gerar relatório técnico JSON
+- [x] `services/mesh/mesh_validator.py`
+- [x] Verificar se é manifold/watertight (Trimesh)
+- [x] Verificar faces abertas (buracos / arestas abertas)
+- [x] Verificar escala e unidades (bounding box + volume)
+- [ ] Verificar espessura mínima — não implementado (heurística de wall-thickness fica p/ depois)
+- [x] Verificar presença de base plana (heurística de vértices no plano Z mínimo)
+- [x] Estimar necessidade de suportes (heurística altura vs. footprint)
+- [x] Gerar relatório técnico JSON (`MeshReport.to_dict`)
 
 ### Backend — Reparo Automático
-- [ ] `services/mesh/mesh_repair.py`
-- [ ] Tentativa de fechamento de faces abertas
-- [ ] Correção de normais invertidas
-- [ ] Remoção de geometria duplicada
-- [ ] Contagem de tentativas por pedido (`aiAttempts`)
+- [x] Reparo implementado em `mesh_validator.attempt_repair()` (não num `mesh_repair.py` separado)
+- [x] Tentativa de fechamento de faces abertas (`trimesh.repair.fill_holes`)
+- [x] Correção de normais invertidas (`trimesh.repair.fix_normals`)
+- [x] Remoção de geometria duplicada (`merge_vertices` + `unique_faces` + `nondegenerate_faces`)
+- [x] Contagem de tentativas por pedido (`ai_attempts`, teto de 3 → `designer_required`)
 
 ### Backend — Fallback Designer
-- [ ] Lógica de 3 tentativas antes de `designer_required`
-- [ ] `POST /api/v1/orders/{id}/request-designer`
-- [ ] Criação de `DesignerTask`
-- [ ] Geração de pacote para designer (PDF/ZIP com briefing + imagens)
-- [ ] Notificação por email (SMTP)
-- [ ] `POST /api/v1/orders/{id}/upload-final-model` (admin/designer)
+- [x] Lógica de 3 tentativas antes de `designer_required`
+- [x] `POST /api/v1/orders/{id}/request-designer`
+- [x] Criação de `DesignerTask`
+- [ ] Geração de pacote para designer (PDF/ZIP) — não feito; o painel do designer exibe o briefing + assets direto
+- [x] Notificação por email (SMTP) — `send_designer_notification`
+- [x] `POST /api/v1/orders/{id}/upload-final-model` (admin/designer)
 
-### Frontend — Admin
-- [ ] `/admin` — dashboard admin
-- [ ] `/admin/orders` — lista com filtros de status
-- [ ] `/admin/orders/[id]` — gestão completa do pedido
-- [ ] `AdminActionPanel` — ações manuais admin
-- [ ] `DesignerTaskPanel` — painel do designer
-- [ ] Upload manual de modelo final
+### Frontend — Painel do Designer
+> Nota: em vez de um dashboard `/admin` genérico, a Fase 4 entregou um painel dedicado `/designer`.
+- [x] `/designer` — lista de tarefas do designer (`GET /designer/tasks`)
+- [x] `/designer/tasks/[id]` — detalhe da tarefa (briefing técnico, sem dados pessoais do cliente)
+- [x] Upload manual do modelo final pelo designer/admin
+- [ ] Dashboard `/admin` genérico com filtros de status — adiado (não necessário p/ o fluxo atual)
 
 ### Testes — Fase 4
-- [ ] Testes de validação de mesh (com arquivos reais de teste)
-- [ ] Testes de contagem de tentativas
-- [ ] Testes de transição para `designer_required`
-- [ ] Testes de upload do designer
+- [x] Testes de validação/reparo de mesh (`test_mesh_validator.py`)
+- [x] Testes de transição para `designer_required` e fluxo do designer (`test_designer_flow.py`)
+- [x] Testes de storage R2 (`test_r2_storage.py`)
+- [x] **53 testes passando no total**
 
 ---
 
@@ -325,6 +325,12 @@ _Nenhum aberto._
 
 ## 🗓️ Sprint atual
 
-**Sprint 1 — Setup + Auth + Orders CRUD**
-- Prazo: 5 dias
-- Objetivo: projeto rodando localmente do backend ao frontend
+**Próximo — Fase 5 (Print Workflow)**
+- Objetivo: fila de impressão, aprovação final, status de produção (ver Fase 5 acima)
+- Bloqueio atual: validar o endpoint RunPod TRELLIS.2 real (sair do mock) antes de avançar
+
+### Fases concluídas
+- ✅ Fase 1 — Setup + Auth + Orders CRUD
+- ✅ Fase 2 — IA: Briefing (Claude) + Imagens conceituais (GPT Image 2)
+- ✅ Fase 3 — Geração 3D (TRELLIS.2) + Preview React Three Fiber
+- ✅ Fase 4 — Validação/reparo de mesh + fallback designer + storage R2
