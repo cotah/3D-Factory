@@ -35,8 +35,9 @@ WORKDIR /app
 # PyTorch with CUDA 12.4.
 RUN pip3 install torch==2.4.0 torchvision==0.19.0 --index-url https://download.pytorch.org/whl/cu124
 
-# Flash Attention (needs torch already installed; --no-build-isolation).
-RUN pip3 install flash-attn --no-build-isolation
+# xformers attention (flash-attn fails to compile in this image; xformers ships
+# prebuilt CUDA wheels and TRELLIS supports it via ATTN_BACKEND=xformers).
+RUN pip3 install xformers --index-url https://download.pytorch.org/whl/cu124
 
 # RunPod SDK.
 RUN pip3 install runpod==1.7.0
@@ -71,6 +72,10 @@ WORKDIR /app/TRELLIS
 RUN pip3 install -e .
 
 WORKDIR /app
+
+# TRELLIS reads ATTN_BACKEND to pick the attention implementation.
+ENV ATTN_BACKEND=xformers
+
 COPY handler.py .
 
 # Optional: pre-download the model weights to speed up cold start (bigger image).

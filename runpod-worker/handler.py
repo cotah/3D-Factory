@@ -4,14 +4,19 @@ Receives image URLs (or base64) and returns a generated 3D model (GLB) as
 base64. The pipeline is loaded once at worker startup, not per request.
 """
 
-import base64
-import io
 import os
-import tempfile
-import traceback
 
-import requests
-import runpod
+# Select the xformers attention backend before TRELLIS is imported anywhere
+# (flash-attn is not installed in the image).
+os.environ.setdefault("ATTN_BACKEND", "xformers")
+
+import base64  # noqa: E402
+import io  # noqa: E402
+import tempfile  # noqa: E402
+import traceback  # noqa: E402
+
+import requests  # noqa: E402
+import runpod  # noqa: E402
 
 
 def load_pipeline():
