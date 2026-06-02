@@ -1,95 +1,51 @@
-# Base image with CUDA 12.4 + cuDNN (devel, so nvcc is available for builds).
 FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
-ENV OPENCV_IO_ENABLE_OPENEXR=1
-ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-# Disable nvdiffrast (not installed); TRELLIS still exports GLB without it.
-ENV NVDIFFRAST_DISABLE=1
-# Build CUDA extensions for common datacenter + Ada GPUs.
-ENV TORCH_CUDA_ARCH_LIST="8.6;8.9;9.0"
-
-RUN apt-get update && apt-get install -y \
-    python3.11 \
-    python3.11-dev \
-    python3-pip \
-    git \
-    wget \
-    curl \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgomp1 \
-    ninja-build \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 \
-    && ln -sf /usr/bin/python3 /usr/bin/python
-
-RUN pip3 install --upgrade pip
-
-WORKDIR /app
-
-# PyTorch + xformers with CUDA 12.4, installed in ONE command so pip resolves a
-# mutually-compatible set. There is no standalone xformers wheel for torch 2.4.0
-# + cu124, so pinning torch/torchvision here lets pip pick the matching xformers
-# build and never upgrade torch (an upgrade breaks torchvision's compiled ops:
-# "operator torchvision::nms does not exist"). flash-attn fails to compile in
-# this image; TRELLIS uses xformers via ATTN_BACKEND=xformers.
-RUN pip3 install torch==2.4.0 torchvision==0.19.0 xformers --index-url https://download.pytorch.org/whl/cu124
-
-# RunPod SDK.
-RUN pip3 install runpod==1.7.0
-
-# spconv — sparse convolution CUDA backend required by TRELLIS. Prebuilt wheel
-# for CUDA 12.4 (matches the base image).
-RUN pip3 install spconv-cu124
-
-# TRELLIS Python dependencies.
-RUN pip3 install \
-    pillow \
-    numpy \
-    scipy \
-    trimesh \
-    open3d \
-    huggingface_hub \
-    transformers \
-    diffusers \
-    accelerate \
-    einops \
-    imageio \
-    imageio-ffmpeg \
-    requests \
-    opencv-python-headless \
-    easydict \
-    omegaconf \
-    plyfile \
-    pygltflib \
-    git+https://github.com/EasternJournalist/utils3d.git@9a4eb15
-
-# nvdiffrast is intentionally omitted: it needs CUDA compilation that fails in
-# this build, and TRELLIS only uses it for advanced PBR texture rendering.
-# Exporting a GLB for 3D preview works without it (see NVDIFFRAST_DISABLE below).
-
-# Clone TRELLIS. It is NOT a pip-installable package (no setup.py / pyproject.toml),
-# so we add it to PYTHONPATH and import it as a module instead of `pip install -e .`.
-# Its Python deps (einops, utils3d, etc.) are installed in the pip block above.
-RUN git clone https://github.com/microsoft/TRELLIS.git /app/TRELLIS
-
-ENV PYTHONPATH=/app/TRELLIS:$PYTHONPATH
-
-WORKDIR /app
-
-# TRELLIS reads ATTN_BACKEND to pick the attention implementation.
+ENV SPCONV_ALGO=native
 ENV ATTN_BACKEND=xformers
 
-COPY handler.py .
+RUN apt-get update && apt-get install -y \
+    python3.11 python3.11-dev python3-pip \
+    git wget curl ninja-build build-essential \
+    libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 \
+    libxrender-dev libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Optional: pre-download the model weights to speed up cold start (bigger image).
-# RUN python3 -c "from trellis.pipelines import TrellisImageTo3DPipeline; TrellisImageTo3DPipeline.from_pretrained('microsoft/TRELLIS-image-large')"
+RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3 /usr/bin/python && \
+    pip3 install --upgrade pip
+
+WORKDIR /app
+
+# PyTorch cu124
+RUN pip3 install torch==2.4.0 torchvision==0.19.0 --index-url https://download.pytorch.org/whl/cu124
+
+# xformers do PyPI (não do índice cu124)
+RUN pip3 install xformers==0.0.27.post2
+
+# RunPod SDK
+RUN pip3 install runpod==1.7.0
+
+# Dependências básicas do TRELLIS (do setup.sh --basic)
+RUN pip3 install \
+    pillow imageio imageio-ffmpeg tqdm easydict \
+    opencv-python-headless scipy ninja rembg onnxruntime \
+    trimesh xatlas pyvista pymeshfix igraph \
+    transformers diffusers accelerate \
+    einops plyfile pygltflib omegaconf \
+    git+https://github.com/EasternJournalist/utils3d.git@9a4eb15e4021b67b12c460c7057d642626897ec8
+
+# spconv (sparse convolution — obrigatório para TRELLIS)
+RUN pip3 install spconv-cu124
+
+# Clona TRELLIS e adiciona ao PYTHONPATH
+RUN git clone https://github.com/microsoft/TRELLIS.git /app/TRELLIS
+
+ENV PYTHONPATH=/app/TRELLIS
+
+WORKDIR /app
+
+COPY handler.py .
 
 CMD ["python3", "-u", "handler.py"]
