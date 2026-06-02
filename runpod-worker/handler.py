@@ -6,9 +6,11 @@ base64. The pipeline is loaded once at worker startup, not per request.
 
 import os
 
-# Select the xformers attention backend before TRELLIS is imported anywhere
-# (flash-attn is not installed in the image).
+# Configure TRELLIS backends before it is imported anywhere: use xformers
+# attention (flash-attn not installed) and disable nvdiffrast (not installed;
+# only needed for advanced PBR texture rendering, not for GLB export).
 os.environ.setdefault("ATTN_BACKEND", "xformers")
+os.environ.setdefault("NVDIFFRAST_DISABLE", "1")
 
 import base64  # noqa: E402
 import io  # noqa: E402
