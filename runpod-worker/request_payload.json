@@ -1,0 +1,19 @@
+{
+  "input": {
+    "images": [
+      "URL_DA_IMAGEM_AQUI"
+    ],
+    "order_id": "debug-001",
+    "output_format": "glb",
+    "seed": 42,
+    "sparse_steps": 4,
+    "slat_steps": 4,
+    "sparse_cfg": 7.5,
+    "slat_cfg": 3.0
+  },
+  "policy": {
+    "executionTimeout": 900000,
+    "ttl": 1200000,
+    "lowPriority": false
+  }
+}
