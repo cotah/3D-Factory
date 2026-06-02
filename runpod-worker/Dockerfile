@@ -48,8 +48,10 @@ RUN pip3 install \
 # spconv (sparse convolution — obrigatório para TRELLIS)
 RUN pip3 install spconv-cu124
 
-# Clona TRELLIS e adiciona ao PYTHONPATH
-RUN git clone https://github.com/microsoft/TRELLIS.git /app/TRELLIS
+# Clona TRELLIS e adiciona ao PYTHONPATH. --recurse-submodules é essencial: o
+# flexicubes (trellis/representations/mesh/flexicubes) é um submódulo git; sem
+# isso o diretório vem vazio e o import de FlexiCubes falha.
+RUN git clone --recurse-submodules https://github.com/microsoft/TRELLIS.git /app/TRELLIS
 
 ENV PYTHONPATH=/app/TRELLIS
 
