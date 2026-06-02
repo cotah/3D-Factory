@@ -1,43 +1,47 @@
 """RunPod Serverless handler for TRELLIS.2.
 
 Receives image URLs (or base64) and returns a generated 3D model (GLB) as
-base64. The pipeline is loaded once at worker startup, not per request.
+base64.
+
+The pipeline is lazy-loaded on the FIRST job (not at import time). If loading
+fails, the error surfaces as a JSON ``{"error": ...}`` in the job response
+instead of crashing the worker before it can register — a crash at import time
+shows up to the caller only as an opaque 404.
 """
 
+import base64
+import io
 import os
+import tempfile
+import traceback
 
-# Configure TRELLIS backends before it is imported anywhere: use xformers
-# attention (flash-attn not installed) and disable nvdiffrast (not installed;
-# only needed for advanced PBR texture rendering, not for GLB export).
-os.environ.setdefault("ATTN_BACKEND", "xformers")
-os.environ.setdefault("NVDIFFRAST_DISABLE", "1")
+import requests
+import runpod
 
-import base64  # noqa: E402
-import io  # noqa: E402
-import tempfile  # noqa: E402
-import traceback  # noqa: E402
-
-import requests  # noqa: E402
-import runpod  # noqa: E402
+# Loaded lazily on first use; see get_pipeline().
+PIPELINE = None
 
 
-def load_pipeline():
-    """Load the TRELLIS.2 pipeline once at worker startup."""
-    os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
-    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+def get_pipeline():
+    """Load the TRELLIS.2 pipeline once, on first use."""
+    global PIPELINE
+    if PIPELINE is None:
+        # Configure TRELLIS backends before it is imported: xformers attention
+        # (flash-attn not installed) and disable nvdiffrast (only needed for
+        # advanced PBR texture rendering, not for GLB export).
+        os.environ.setdefault("ATTN_BACKEND", "xformers")
+        os.environ.setdefault("NVDIFFRAST_DISABLE", "1")
+        os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
+        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
-    from trellis.pipelines import TrellisImageTo3DPipeline
+        from trellis.pipelines import TrellisImageTo3DPipeline
 
-    pipeline = TrellisImageTo3DPipeline.from_pretrained(
-        "microsoft/TRELLIS-image-large"
-    )
-    pipeline.cuda()
-    return pipeline
-
-
-print("Loading TRELLIS.2 pipeline...")
-PIPELINE = load_pipeline()
-print("Pipeline loaded.")
+        pipeline = TrellisImageTo3DPipeline.from_pretrained(
+            "microsoft/TRELLIS-image-large"
+        )
+        pipeline.cuda()
+        PIPELINE = pipeline
+    return PIPELINE
 
 
 def _download_image(url: str):
@@ -62,18 +66,26 @@ def handler(job):
             "output_format": "glb"}
     output: {"model_base64": str, "format": "glb", "order_id": str,
              "size_bytes": int}
+
+    Any failure (including pipeline load) returns a JSON error rather than
+    raising, so the worker stays alive and the cause is visible in the response.
     """
-    job_input = job.get("input", {})
-    images_input = job_input.get("images", [])
-    order_id = job_input.get("order_id", "unknown")
-    output_format = job_input.get("output_format", "glb")
-
-    if not images_input:
-        return {"error": "No images provided"}
-
-    print(f"Processing order {order_id} with {len(images_input)} image(s)")
-
     try:
+        job_input = job.get("input", {})
+        images_input = job_input.get("images", [])
+        order_id = job_input.get("order_id", "unknown")
+        output_format = job_input.get("output_format", "glb")
+
+        if not images_input:
+            return {"error": "No images provided"}
+
+        print(f"Processing order {order_id} with {len(images_input)} image(s)")
+
+        # Lazy-load on first request; a failure here is caught below.
+        print("Loading TRELLIS.2 pipeline (first request)...")
+        pipeline = get_pipeline()
+        print("Pipeline ready.")
+
         first_image = images_input[0]
         if isinstance(first_image, str) and first_image.startswith("http"):
             image = _download_image(first_image)
@@ -82,7 +94,7 @@ def handler(job):
         print(f"Image loaded: {image.size}")
 
         print("Running 3D generation...")
-        outputs = PIPELINE.run(image, seed=42, formats=[output_format])
+        outputs = pipeline.run(image, seed=42, formats=[output_format])
 
         with tempfile.NamedTemporaryFile(suffix=f".{output_format}", delete=False) as tmp:
             tmp_path = tmp.name
@@ -112,7 +124,7 @@ def handler(job):
 
     except Exception as exc:  # noqa: BLE001
         tb = traceback.format_exc()
-        print(f"Generation error: {exc}\n{tb}")
+        print(f"Handler error: {exc}\n{tb}")
         return {"error": str(exc), "traceback": tb}
 
 

@@ -44,6 +44,10 @@ RUN pip3 install xformers --index-url https://download.pytorch.org/whl/cu124
 # RunPod SDK.
 RUN pip3 install runpod==1.7.0
 
+# spconv — sparse convolution CUDA backend required by TRELLIS. Prebuilt wheel
+# for CUDA 12.4 (matches the base image).
+RUN pip3 install spconv-cu124
+
 # TRELLIS Python dependencies.
 RUN pip3 install \
     pillow \
