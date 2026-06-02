@@ -18,8 +18,14 @@ RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 && \
 
 WORKDIR /app
 
-# PyTorch cu124
-RUN pip3 install torch==2.4.0 torchvision==0.19.0 --index-url https://download.pytorch.org/whl/cu124
+# PyTorch cu124 (torch + torchvision + torchaudio juntos, do índice cu124, para
+# o pip resolver o trio CUDA consistente e o torchvision vir com as extensões).
+RUN pip3 install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cu124
+
+# Valida no build que o torchvision tem as extensões CUDA (operador nms) antes
+# de seguir — falha cedo aqui em vez de só em runtime.
+RUN python3 -c "import torchvision; print(torchvision.__version__)" && \
+    python3 -c "from torchvision.ops import nms; print('nms OK')"
 
 # xformers do PyPI (não do índice cu124)
 RUN pip3 install xformers==0.0.27.post2
