@@ -63,16 +63,19 @@ RUN pip3 install \
     easydict \
     omegaconf \
     plyfile \
-    pygltflib
+    pygltflib \
+    git+https://github.com/EasternJournalist/utils3d.git@9a4eb15
 
 # nvdiffrast is intentionally omitted: it needs CUDA compilation that fails in
 # this build, and TRELLIS only uses it for advanced PBR texture rendering.
 # Exporting a GLB for 3D preview works without it (see NVDIFFRAST_DISABLE below).
 
-# Clone and install TRELLIS.
+# Clone TRELLIS. It is NOT a pip-installable package (no setup.py / pyproject.toml),
+# so we add it to PYTHONPATH and import it as a module instead of `pip install -e .`.
+# Its Python deps (einops, utils3d, etc.) are installed in the pip block above.
 RUN git clone https://github.com/microsoft/TRELLIS.git /app/TRELLIS
-WORKDIR /app/TRELLIS
-RUN pip3 install -e .
+
+ENV PYTHONPATH=/app/TRELLIS:$PYTHONPATH
 
 WORKDIR /app
 
